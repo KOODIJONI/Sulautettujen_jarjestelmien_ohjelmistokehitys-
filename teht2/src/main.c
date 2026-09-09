@@ -4,6 +4,7 @@
 #include "main.h"
 #include "leds.h"
 #include "buttons.h"
+#include "dispatcher.h"
 //includet aina ekana
 
 /*
@@ -38,13 +39,15 @@ void button_irs(const struct device *dev, struct gpio_callback *cb, uint32_t pin
 
 
 //threadit 
-struct k_thread red_thread_data;
-struct k_thread green_thread_data;
-struct k_thread yellow_thread_data;
-struct k_thread yellow_blink_thread_data;
+#define STACK_SIZE 512
+#define THREAD_PRIORITY 1
 
-struct k_thread pause_thread_data;
-
+K_THREAD_DEFINE(red_tid, STACK_SIZE, red_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(green_tid, STACK_SIZE, green_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(yellow_tid, STACK_SIZE, yellow_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(yellow_blink_tid, STACK_SIZE, yellow_blink_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(pause_tid, STACK_SIZE, pause_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(fifo_consumer_tid, STACK_SIZE, fifo_consumer_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
 //interrupt
 static struct gpio_callback button_cb[5];
 
@@ -60,12 +63,6 @@ static const struct gpio_dt_spec *all_buttons[5] = {
     &button1, &button2, &button3, &button4, &button5
 };
 
-//threadien stackit
-K_THREAD_STACK_DEFINE(red_thread_stack, 1024);
-K_THREAD_STACK_DEFINE(green_thread_stack, 1024);
-K_THREAD_STACK_DEFINE(yellow_thread_stack, 1024);
-K_THREAD_STACK_DEFINE(yellow_blink_thread_stack, 1024);
-K_THREAD_STACK_DEFINE(pause_thread_stack, 1024);
 
 //globalit muuttujat
 volatile int led_state = RED;
@@ -88,6 +85,10 @@ int main(void)
                 return -1;
         }
 
+        if (init_uart_dispatcher() != 0) {
+                return -1;
+        }
+
         // Keskeytykset nappuloille
         for (int i = 0; i < 5; i++) {
                 gpio_pin_configure_dt(all_buttons[i], GPIO_INPUT | GPIO_PULL_UP);
@@ -98,28 +99,6 @@ int main(void)
                 gpio_init_callback(&button_cb[i], button_irs, BIT(all_buttons[i]->pin));
                 gpio_add_callback(all_buttons[i]->port, &button_cb[i]);
         }
-
-        //thredit
-        k_thread_create(&red_thread_data, red_thread_stack, 
-                K_THREAD_STACK_SIZEOF(red_thread_stack),
-                red_led_thread, NULL, NULL, NULL, 1, 0, K_NO_WAIT);
-
-        k_thread_create(&green_thread_data, green_thread_stack, 
-                K_THREAD_STACK_SIZEOF(green_thread_stack),
-                green_led_thread, NULL, NULL, NULL, 1, 0, K_NO_WAIT);
-
-        k_thread_create(&yellow_thread_data, yellow_thread_stack, 
-                K_THREAD_STACK_SIZEOF(yellow_thread_stack),
-                yellow_led_thread, NULL, NULL, NULL, 1, 0, K_NO_WAIT);
-
-        k_thread_create(&yellow_blink_thread_data, yellow_blink_thread_stack,
-                K_THREAD_STACK_SIZEOF(yellow_blink_thread_stack),
-                yellow_blink_thread, NULL, NULL, NULL, 1, 0, K_NO_WAIT);
-
-        k_thread_create(&pause_thread_data, pause_thread_stack, 
-                K_THREAD_STACK_SIZEOF(pause_thread_stack),
-                pause_led_thread, NULL, NULL, NULL, 1, 0, K_NO_WAIT);
-
         return 0;
 }
 //punanen thredi
@@ -246,6 +225,17 @@ void pause_led_thread(void *arg1, void *arg2, void *arg3)
     
                 k_msleep(10);
         }
+}
+
+void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
+{
+    while (1) {
+        struct data_t *buf = k_fifo_get(&dispatcher_fifo, K_FOREVER);
+        if (buf != NULL) {
+            printk("Received message: %s\n", buf->msg);
+            k_free(buf);
+        }
+    }
 }
 //nappula keskeytys
 void button_irs(const struct device *dev, struct gpio_callback *cb, uint32_t pins)

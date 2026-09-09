@@ -12,6 +12,6 @@ project(teht2)
 
 
 
-target_sources(app PRIVATE src/main.c src/leds.c src/buttons.c)
+target_sources(app PRIVATE src/main.c src/leds.c src/buttons.c src/dispatcher.c src/dispatcher.c)
 target_include_directories(app PRIVATE include)
 
