@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "name": "Zephyr",
+      "compileCommands": "${workspaceFolder}/teht2/build/teht2/compile_commands.json",
+      "intelliSenseMode": "gcc-arm",
+      "configurationProvider": "ms-vscode.cmake-tools",
+      "compilerPath": "/home/joni/ncs/toolchains/fbf7391cab/opt/zephyr-sdk/gnu/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc",
+      "includePath": [
+        "${workspaceFolder}/teht2/**",
+        "${workspaceFolder}/teht2/build/teht2/zephyr/include/generated/zephyr",
+        "/home/joni/ncs/v3.4.0/zephyr/include",
+        "/home/joni/ncs/v3.4.0/nrf/include",
+        "/home/joni/ncs/v3.4.0/zephyr/soc/nordic",
+        "/home/joni/ncs/v3.4.0/zephyr/lib/libc/picolibc/include",
+        "/home/joni/ncs/v3.4.0/zephyr/lib/posix/c_lib_ext/getopt",
+        "/home/joni/ncs/v3.4.0/modules/hal/cmsis_6/CMSIS/Core/Include"
+      ],
+      "defines": [
+        "__ZEPHYR__=1",
+        "KERNEL",
+        "NRF5340_XXAA_APPLICATION"
+      ],
+      "cStandard": "c11",
+      "cppStandard": "c++17"
+    }
+  ],
+  "version": 4
+}
