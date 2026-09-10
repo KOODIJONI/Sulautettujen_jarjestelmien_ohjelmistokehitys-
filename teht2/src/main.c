@@ -1,9 +1,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
+#include <stdlib.h>
 #include "main.h"
 #include "leds.h"
-#include "buttons.h"
 #include "dispatcher.h"
 //includet aina ekana
 
@@ -35,7 +35,6 @@ Toteutettu RTOS arkkitehtuuri mallilla
     \___)=(___/
 
 */
-void button_irs(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
 
 
 //threadit 
@@ -45,32 +44,28 @@ void button_irs(const struct device *dev, struct gpio_callback *cb, uint32_t pin
 K_THREAD_DEFINE(red_tid, STACK_SIZE, red_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
 K_THREAD_DEFINE(green_tid, STACK_SIZE, green_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
 K_THREAD_DEFINE(yellow_tid, STACK_SIZE, yellow_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
-K_THREAD_DEFINE(yellow_blink_tid, STACK_SIZE, yellow_blink_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
-K_THREAD_DEFINE(pause_tid, STACK_SIZE, pause_led_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
 K_THREAD_DEFINE(fifo_consumer_tid, STACK_SIZE, fifo_consumer_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(sequence_tid, STACK_SIZE, sequence_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);
 //interrupt
-static struct gpio_callback button_cb[5];
 
-// nappula speksaus
-static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(BUTTON1_NODE, gpios);
-static const struct gpio_dt_spec button2 = GPIO_DT_SPEC_GET(BUTTON2_NODE, gpios);
-static const struct gpio_dt_spec button3 = GPIO_DT_SPEC_GET(BUTTON3_NODE, gpios);
-static const struct gpio_dt_spec button4 = GPIO_DT_SPEC_GET(BUTTON4_NODE, gpios);
-static const struct gpio_dt_spec button5 = GPIO_DT_SPEC_GET(BUTTON5_NODE, gpios);
+//Mutexi ja conditional varit
+K_MUTEX_DEFINE(sync_mutex);
+K_CONDVAR_DEFINE(red_cond);
+K_CONDVAR_DEFINE(green_cond);
+K_CONDVAR_DEFINE(yellow_cond);
 
-// array nappuloista
-static const struct gpio_dt_spec *all_buttons[5] = {
-    &button1, &button2, &button3, &button4, &button5
-};
+//semiforet
+K_SEM_DEFINE(seq_sem, 0, 1);
+K_SEM_DEFINE(release_sem,0,1);
 
+//syötetyn valon delay
+static volatile int active_delay;
 
-//globalit muuttujat
-volatile int led_state = RED;
-volatile int last_led_state = RED;
+static volatile bool sequence_active = false;
 
-volatile bool button_pressed[5] = {false};
-volatile int64_t last_times[5] = {0};
-
+//T moodi puskuri
+static command_t cmd_buffer[MAX_COMMANDS];
+static size_t cmd_count = 0;
 
 //pääohjelma
 int main(void)
@@ -101,39 +96,39 @@ int main(void)
         }
         return 0;
 }
+
 //punanen thredi
 void red_led_thread(void *arg1, void *arg2, void *arg3)
 {
-
         while (1) {
-                if (led_state == RED) {
+                k_mutex_lock(&sync_mutex, K_FOREVER);
 
-                        led_red_set(1);
-                        k_msleep(1000);
-                        led_red_set(0);
-                        if (led_state == RED) { // jos tila ei kuulu threadille nii älä vaiha
-                                led_state = GREEN;
-                        }
-                }
-                k_msleep(10);
+                k_condvar_wait(&red_cond, &sync_mutex, K_FOREVER);
+                int delay = active_delay;
+                k_mutex_unlock(&sync_mutex);
+
+                led_red_set(1);
+                k_msleep(delay);
+                led_red_set(0);
+
+                k_sem_give(&release_sem);
         }
 }
 // vihreä thredi
 void green_led_thread(void *arg1, void *arg2, void *arg3)
 {
-     
         while (1) {
+                k_mutex_lock(&sync_mutex, K_FOREVER);
 
-                if (led_state == GREEN) {
-                        led_green_set(1);
-                        k_msleep(1000);
-                        led_green_set(0);
-                        if (led_state == GREEN) {
-                                led_state = YELLOW;
-                        }
+                k_condvar_wait(&green_cond, &sync_mutex, K_FOREVER);
+                int delay = active_delay;
+                k_mutex_unlock(&sync_mutex);
 
-                }
-                k_msleep(10);
+                led_green_set(1);
+                k_msleep(delay);
+                led_green_set(0);
+
+                k_sem_give(&release_sem);
         }
 }
 
@@ -141,90 +136,58 @@ void green_led_thread(void *arg1, void *arg2, void *arg3)
 void yellow_led_thread(void *arg1, void *arg2, void *arg3)
 {
         while (1) {
-                if (led_state == YELLOW) {
-                        led_red_set(1);
-                        led_green_set(1);
-                        k_msleep(1000);
-                        led_red_set(0);
-                        led_green_set(0);
-                        if (led_state == YELLOW) {
-                                led_state = RED;
-                        }
-                }
-                k_msleep(10);
+                k_mutex_lock(&sync_mutex, K_FOREVER);
+
+                k_condvar_wait(&yellow_cond, &sync_mutex, K_FOREVER);
+                int delay = active_delay;
+                k_mutex_unlock(&sync_mutex);
+
+                led_yellow_set(1);
+                k_msleep(delay);
+                led_yellow_set(0);
+
+                k_sem_give(&release_sem);
         }
 }
 
-void yellow_blink_thread(void *arg1, void *arg2, void *arg3)
+static void execute_led_cmd(char color, int delay)
 {
-        while (1) {
-                if (led_state == YELLOW_BLINK) {
-                                
-                        led_yellow_toggle();
-                        k_msleep(500);
-                }
-                k_msleep(10);
+        k_mutex_lock(&sync_mutex, K_FOREVER);
+        active_delay = delay;
+        printk("%c, %d\n", color, delay);
+        if (color == 'R' || color == 'r') {
+                k_condvar_signal(&red_cond);
+        } else if (color == 'G' || color == 'g') {
+                k_condvar_signal(&green_cond);
+        } else if (color == 'Y' || color == 'y') {
+                k_condvar_signal(&yellow_cond);
+        } else {
+                k_mutex_unlock(&sync_mutex);
+                return;
         }
+
+        
+
+        k_mutex_unlock(&sync_mutex);
+
+
+        k_sem_take(&release_sem, K_FOREVER);
 }
-//pause thredi
-void pause_led_thread(void *arg1, void *arg2, void *arg3)
+
+void sequence_thread(void *arg1, void *arg2, void *arg3)
 {
-        while (1) {
-                if (button_was_pressed(0) ) { // jos nappula nii 4 ja jos on jo neljä nii takas
-                        
-                        if (led_state < PAUSE) {
-
-                                last_led_state = led_state;
-                                led_state = PAUSE;
-                                leds_off(); //valot pois
-
-                        } 
-                        else {
-                                led_state = last_led_state;
-                        }
+    while (1) {
+        k_sem_take(&seq_sem, K_FOREVER);
+        //pyöritä sekvenssiä
+        while (sequence_active && cmd_count > 0) {
+            for (size_t i = 0; i < cmd_count; i++) {
+                if (!sequence_active) {
+                    break; 
                 }
-                if (button_was_pressed(1)) { // jos nappula nii 1
-
-                        if (led_state ==PAUSE) {
-                                led_red_set(1);
-                                led_state = RED_ON;
-                        }
-                        else if (led_state ==RED_ON) {
-                                led_red_set(0);
-                                led_state = PAUSE;
-                        }
-                }
-                if (button_was_pressed(2)) { // jos nappula nii 2
-                        if (led_state ==PAUSE) {
-                                led_yellow_set(1);
-                                led_state = RED_GREEN_ON;
-                        }else if(led_state ==RED_GREEN_ON){
-                                led_yellow_set(0);
-                                led_state = PAUSE;
-                        }
-                }
-                if (button_was_pressed(3)) { // jos nappula nii 3
-                        if (led_state ==PAUSE) {
-                                led_green_set(1);
-                                led_state = GREEN_ON;
-                        }else if(led_state ==GREEN_ON){
-                                led_green_set(0);
-                                led_state = PAUSE;
-                        }
-                }
-                if (button_was_pressed(4)) { // jos nappula nii 5
-                        //blink yellow
-                        if (led_state ==PAUSE) {
-                                led_state = YELLOW_BLINK;
-                        }else  if(led_state ==YELLOW_BLINK){
-                                led_state = PAUSE;
-                                leds_off();
-                        }
-                }
-
-    
-                k_msleep(10);
+                execute_led_cmd(cmd_buffer[i].color, cmd_buffer[i].delay);
+            }
         }
+    }
 }
 
 void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
@@ -232,21 +195,49 @@ void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
     while (1) {
         struct data_t *buf = k_fifo_get(&dispatcher_fifo, K_FOREVER);
         if (buf != NULL) {
-            printk("Received message: %s\n", buf->msg);
-            k_free(buf);
-        }
-    }
-}
-//nappula keskeytys
-void button_irs(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-    for (int i = 0; i < 5; i++) {
-        if (dev == all_buttons[i]->port && (pins & BIT(all_buttons[i]->pin))) {
-            int64_t now = k_uptime_get();
-            if ((now - last_times[i]) > 200) {
-                button_pressed[i] = true;
-                last_times[i] = now;
+            char color = buf->msg[0];
+            
+            //parserointi
+            char *comma = strchr(buf->msg, ',');
+            int delay = (comma != NULL) ? atoi(comma + 1) : atoi(&buf->msg[2]);
+            if (delay <= 0) {
+                delay = 1000;
             }
+
+            //Jos väri kirjai
+            if (color == 'R' || color == 'r' || 
+                color == 'G' || color == 'g' || 
+                color == 'Y' || color == 'y') {
+
+                // tallenna kometopuskurii
+                k_mutex_lock(&sync_mutex, K_FOREVER);
+                if (cmd_count < MAX_COMMANDS) {
+                    cmd_buffer[cmd_count].color = color;
+                    cmd_buffer[cmd_count].delay = delay;
+                    cmd_count++;
+                }
+                k_mutex_unlock(&sync_mutex);
+
+                //aja ledi 
+                execute_led_cmd(color, delay);
+
+                // Toisto
+                } else if (color == 'T' || color == 't') {
+                        if (!sequence_active && cmd_count > 0) {
+                                sequence_active = true;
+                                k_sem_give(&seq_sem);
+                        }
+
+                // Pysäytä skenvenssi
+                } else if (color == 'C' || color == 'c') {
+                        sequence_active = false;
+
+                        k_mutex_lock(&sync_mutex, K_FOREVER);
+                        cmd_count = 0;
+                        k_mutex_unlock(&sync_mutex);
+                }
+
+                k_free(buf);
         }
     }
 }
