@@ -5,12 +5,11 @@
 
 struct data_t {
     void *fifo_reserved;
-    char msg[20];
+    char msg[128];
 };
 
 extern struct k_fifo dispatcher_fifo;
 
-
 int init_uart_dispatcher(void);
 
-#endif /* UART_DISPATCHER_H */
+#endif
