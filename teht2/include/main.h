@@ -4,9 +4,18 @@
 void red_led_thread(void *arg1, void *arg2, void *arg3);
 void green_led_thread(void *arg1, void *arg2, void *arg3);
 void yellow_led_thread(void *arg1, void *arg2, void *arg3);
-void yellow_blink_thread(void *arg1, void *arg2, void *arg3);
-void pause_led_thread(void *arg1, void *arg2, void *arg3);
+//void yellow_blink_thread(void *arg1, void *arg2, void *arg3);
+//void pause_led_thread(void *arg1, void *arg2, void *arg3);
 void fifo_consumer_thread(void *arg1, void *arg2, void *arg3);
+void sequence_thread(void *arg1, void *arg2, void *arg3);
+
+#define MAX_COMMANDS 32
+
+
+typedef struct {
+    char color;
+    int delay;
+} command_t;
 
 enum led_states {
     RED = 0,
