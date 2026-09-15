@@ -16,19 +16,14 @@ Sulautetun ohjelmoinnin kurssi
 
 Pistevaatimus täydet pisteet koska tein tehtävässä vaadittavat asiat
 
-1. Sekvenssin vastaanotto ja tallennus
+1. Mikrosekuntien laskenta perus sekvenssistä ja väri säikeistä
 
-2. dispatcher-taski
+2. Debug printtaus fifo taski
 
-3. condition variablet käytössä
+3. Debug togglaus ominaisuus 'D'
 
-4. release-signaali valotaskissa
+4. 4 assert kutsua lisätty
 
-5. sekvenssin ajastus
-
-6. refaktorointi
-
-7. toisto
 
         .--.
        |o_o |
