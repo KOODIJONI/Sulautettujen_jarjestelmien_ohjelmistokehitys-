@@ -16,7 +16,7 @@ void timing_task_start(enum timing_data_type task_type, const char *task_name)
 
     times[task_type].type = task_type;
     times[task_type].name = task_name;
-    times[task_type].start_time = k_uptime_get();
+    times[task_type].start_time = k_cycle_get_32();
 }
 void toggle_debug(){
     debug_enabled=!debug_enabled;
@@ -39,8 +39,8 @@ void timing_task_end(enum timing_data_type task_type)
     }
     
     struct timing_data *data = &times[task_type];
-    data->end_time = k_uptime_get();
-    data->duration = data->end_time - data->start_time;
+    data->end_time  = k_cycle_get_32();
+    data->duration =  k_cyc_to_us_floor32(data->end_time - data->start_time);
 
     if (debug_enabled) {
         k_fifo_put(&debug_info, data);
@@ -60,7 +60,7 @@ void debug_fifo_thread_entry(void *p1, void *p2, void *p3)
         struct timing_data *item = k_fifo_get(&debug_info, K_FOREVER);
 
         if (item != NULL) {
-            printk("Task [%s | ID:%d] executed in %lld ms (Start: %lld ms, End: %lld ms)\n",
+            printk("Task [%s | ID:%d] executed in %lld us (Start: %lld cycle, End: %lld cycle)\n",
                 item->name != NULL ? item->name : "UNKNOWN",
                 item->type,
                 item->duration,
