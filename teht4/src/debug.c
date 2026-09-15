@@ -1,6 +1,6 @@
 #include "debug.h"
 #include <zephyr/logging/log.h>
-
+#include <assert.h>
 LOG_MODULE_REGISTER(debug_timing, LOG_LEVEL_INF);
 
 bool debug_enabled = true;
@@ -14,6 +14,8 @@ void timing_task_start(enum timing_data_type task_type, const char *task_name)
         return;
     }
 
+    assert(task_type <=TIMING_TASK_COUNT);
+    
     times[task_type].type = task_type;
     times[task_type].name = task_name;
     times[task_type].start_time = k_cycle_get_32();
@@ -37,7 +39,9 @@ void timing_task_end(enum timing_data_type task_type)
     if (task_type >= TIMING_TASK_COUNT) {
         return;
     }
-    
+
+    assert(task_type <=TIMING_TASK_COUNT);
+
     struct timing_data *data = &times[task_type];
     data->end_time  = k_cycle_get_32();
     data->duration =  k_cyc_to_us_floor32(data->end_time - data->start_time);

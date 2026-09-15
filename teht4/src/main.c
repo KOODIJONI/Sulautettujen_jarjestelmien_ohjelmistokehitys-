@@ -2,6 +2,8 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <stdlib.h>
+#include <assert.h>
+
 #include "main.h"
 #include "leds.h"
 #include "dispatcher.h"
@@ -203,9 +205,16 @@ void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
             //parserointi
             char *comma = strchr(buf->msg, ',');
             int delay = (comma != NULL) ? atoi(comma + 1) : atoi(&buf->msg[2]);
+            
+            
+
             if (delay <= 0) {
                 delay = 1000;
             }
+
+            assert(delay>0);
+
+            
 
             //Jos väri kirjai
             if (color == 'R' || color == 'r' || 
@@ -242,6 +251,11 @@ void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
                 else if (color == 'D' || color == 'd'){
                         toggle_debug();
                 }
+                #ifdef DEBUG
+                else{
+                        assert(0);
+                }
+                #endif
 
             
                 timing_task_end(SERIAL_TIMING_DATA);
