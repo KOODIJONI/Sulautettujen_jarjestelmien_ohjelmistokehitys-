@@ -9,7 +9,6 @@ project(teht2)
 target_sources(app PRIVATE
     src/main.c
     src/leds.c
-    src/buttons.c
     src/dispatcher.c
     src/debug.c
 )
