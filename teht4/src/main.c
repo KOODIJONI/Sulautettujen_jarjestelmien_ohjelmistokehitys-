@@ -5,6 +5,7 @@
 #include "main.h"
 #include "leds.h"
 #include "dispatcher.h"
+#include "debug.h"
 //includet aina ekana
 
 /*
@@ -71,11 +72,8 @@ static size_t cmd_count = 0;
 //pääohjelma
 int main(void)
 {
-        // Napit valiina?
-       if (buttons_init() != 0) {
-                return -1;
-        }
-
+        
+   
         // Init ledits
         if (leds_init() != 0) {
                 return -1;
@@ -85,33 +83,26 @@ int main(void)
                 return -1;
         }
 
-        // Keskeytykset nappuloille
-        for (int i = 0; i < 5; i++) {
-                gpio_pin_configure_dt(all_buttons[i], GPIO_INPUT | GPIO_PULL_UP);
-                gpio_pin_interrupt_configure_dt(all_buttons[i], GPIO_INT_EDGE_TO_ACTIVE);
-        }
 
-        for (int i = 0; i < 5; i++) {
-                gpio_init_callback(&button_cb[i], button_irs, BIT(all_buttons[i]->pin));
-                gpio_add_callback(all_buttons[i]->port, &button_cb[i]);
-        }
-        return 0;
 }
 
 //punanen thredi
 void red_led_thread(void *arg1, void *arg2, void *arg3)
 {
         while (1) {
+
                 k_mutex_lock(&sync_mutex, K_FOREVER);
 
                 k_condvar_wait(&red_cond, &sync_mutex, K_FOREVER);
                 int delay = active_delay;
                 k_mutex_unlock(&sync_mutex);
+                timing_task_start(RED_TIMING_DATA,"red_task");
 
                 led_red_set(1);
                 k_msleep(delay);
                 led_red_set(0);
 
+                timing_task_end(RED_TIMING_DATA);
                 k_sem_give(&release_sem);
         }
 }
@@ -124,11 +115,14 @@ void green_led_thread(void *arg1, void *arg2, void *arg3)
                 k_condvar_wait(&green_cond, &sync_mutex, K_FOREVER);
                 int delay = active_delay;
                 k_mutex_unlock(&sync_mutex);
+                timing_task_start(GREEN_TIMING_DATA,"green_task");
+
 
                 led_green_set(1);
                 k_msleep(delay);
                 led_green_set(0);
 
+                timing_task_end(GREEN_TIMING_DATA);
                 k_sem_give(&release_sem);
         }
 }
@@ -142,11 +136,13 @@ void yellow_led_thread(void *arg1, void *arg2, void *arg3)
                 k_condvar_wait(&yellow_cond, &sync_mutex, K_FOREVER);
                 int delay = active_delay;
                 k_mutex_unlock(&sync_mutex);
+                timing_task_start(YELLOW_TIMING_DATA,"yellow_task");
 
                 led_yellow_set(1);
                 k_msleep(delay);
                 led_yellow_set(0);
 
+                timing_task_end(YELLOW_TIMING_DATA);
                 k_sem_give(&release_sem);
         }
 }
@@ -155,7 +151,7 @@ static void execute_led_cmd(char color, int delay)
 {
         k_mutex_lock(&sync_mutex, K_FOREVER);
         active_delay = delay;
-        printk("%c, %d\n", color, delay);
+
         if (color == 'R' || color == 'r') {
                 k_condvar_signal(&red_cond);
         } else if (color == 'G' || color == 'g') {
@@ -181,12 +177,15 @@ void sequence_thread(void *arg1, void *arg2, void *arg3)
         k_sem_take(&seq_sem, K_FOREVER);
         //pyöritä sekvenssiä
         while (sequence_active && cmd_count > 0) {
-            for (size_t i = 0; i < cmd_count; i++) {
-                if (!sequence_active) {
-                    break; 
+                
+                timing_task_start(SEQUENCE_TIMING_DATA,"Sequence Task");
+                for (size_t i = 0; i < cmd_count; i++) {
+                        if (!sequence_active) {
+                        break; 
+                        }
+                        execute_led_cmd(cmd_buffer[i].color, cmd_buffer[i].delay);
                 }
-                execute_led_cmd(cmd_buffer[i].color, cmd_buffer[i].delay);
-            }
+                timing_task_end(SEQUENCE_TIMING_DATA);
         }
     }
 }
@@ -196,6 +195,9 @@ void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
     while (1) {
         struct data_t *buf = k_fifo_get(&dispatcher_fifo, K_FOREVER);
         if (buf != NULL) {
+
+            timing_task_start(SERIAL_TIMING_DATA, "Serial Thread");
+
             char color = buf->msg[0];
             
             //parserointi
@@ -237,7 +239,12 @@ void fifo_consumer_thread(void *arg1, void *arg2, void *arg3)
                         cmd_count = 0;
                         k_mutex_unlock(&sync_mutex);
                 }
+                else if (color == 'D' || color == 'd'){
+                        toggle_debug();
+                }
 
+            
+                timing_task_end(SERIAL_TIMING_DATA);
                 k_free(buf);
         }
     }

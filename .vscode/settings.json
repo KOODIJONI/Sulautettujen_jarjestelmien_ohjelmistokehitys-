@@ -1,7 +1,8 @@
 {
     "nrf-connect.applications": [
         "${workspaceFolder}/teht2/",
-        "${workspaceFolder}/teht3"
+        "${workspaceFolder}/teht3",
+        "${workspaceFolder}/teht4"
     ],
     "cmake.sourceDirectory": "/home/joni/sulautettu_kurssi/teht2"
 }

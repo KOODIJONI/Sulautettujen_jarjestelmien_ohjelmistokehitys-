@@ -11,6 +11,7 @@ target_sources(app PRIVATE
     src/leds.c
     src/buttons.c
     src/dispatcher.c
+    src/debug.c
 )
 
 target_include_directories(app PRIVATE include)
