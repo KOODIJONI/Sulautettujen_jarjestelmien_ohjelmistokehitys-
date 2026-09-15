@@ -71,10 +71,6 @@ static size_t cmd_count = 0;
 //pääohjelma
 int main(void)
 {
-        // Napit valiina?
-       if (buttons_init() != 0) {
-                return -1;
-        }
 
         // Init ledits
         if (leds_init() != 0) {
@@ -85,17 +81,6 @@ int main(void)
                 return -1;
         }
 
-        // Keskeytykset nappuloille
-        for (int i = 0; i < 5; i++) {
-                gpio_pin_configure_dt(all_buttons[i], GPIO_INPUT | GPIO_PULL_UP);
-                gpio_pin_interrupt_configure_dt(all_buttons[i], GPIO_INT_EDGE_TO_ACTIVE);
-        }
-
-        for (int i = 0; i < 5; i++) {
-                gpio_init_callback(&button_cb[i], button_irs, BIT(all_buttons[i]->pin));
-                gpio_add_callback(all_buttons[i]->port, &button_cb[i]);
-        }
-        return 0;
 }
 
 //punanen thredi
