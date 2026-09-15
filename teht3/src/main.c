@@ -13,18 +13,19 @@ Sulautetun ohjelmoinnin kurssi
 
 Pistevaatimus täydet pisteet koska tein tehtävässä vaadittavat asiat
 
-(vol -) nappi.
-        Sekvenssin hallinta
-(vol +) nappi.
-        Punainen LED päälle/pois
-(nappi 2) nappi.
-        Keltanen LED päälle/pois
-(nappi 3) nappi.
-        Vihreä LED päälle/pois
-(nappi 4) nappi.
-        Keltainen LED vilkkuu 500ms välein
+1. Sekvenssin vastaanotto ja tallennus
 
-Toteutettu RTOS arkkitehtuuri mallilla
+2. dispatcher-taski
+
+3. condition variablet käytössä
+
+4. release-signaali valotaskissa
+
+5. sekvenssin ajastus
+
+6. refaktorointi
+
+7. toisto
 
         .--.
        |o_o |
